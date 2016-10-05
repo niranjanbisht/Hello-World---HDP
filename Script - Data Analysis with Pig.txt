@@ -1,0 +1,94 @@
+sed 's/\&amp;/\&/g' BX-Books.csv | sed -e '1d' |sed 's/;/$$$/g' | sed 's/"$$$"/";"/g' | sed 's/"//g' > BX-BooksCorrected.txt
+
+books = LOAD '/user/cloudera/input/BX-BooksCorrected.txt' 
+ USING PigStorage(';') AS 
+ (ISBN:chararray, BookTitle:chararray, 
+ BookAuthor:chararray, YearOfPublication:int, 
+ Publisher:chararray);
+ 
+
+ books = FILTER books BY YearOfPublication > 0;
+
+ pivot = FOREACH (GROUP books BY BookAuthor) 
+ GENERATE group AS BookAuthor, FLATTEN(books.YearOfPublication) AS Year;
+
+authorYearGroup = GROUP pivot BY (BookAuthor, Year);
+with_count = FOREACH authorYearGroup 
+GENERATE FLATTEN(group), COUNT(pivot) as count;
+DESCRIBE with_count;
+ 
+ author_result = FOREACH (GROUP with_count BY BookAuthor) {
+ order_by_count = ORDER with_count BY count DESC;
+ GENERATE group AS Author, order_by_count.(Year, count) AS Books;
+};
+
+pub_auth = FOREACH books GENERATE Publisher, BookAuthor;
+
+distinct_authors = FOREACH (GROUP pub_auth BY Publisher) {
+da = DISTINCT pub_auth.BookAuthor;
+GENERATE group AS Publisher, da AS Author;
+};
+
+
+distinct_flat = FOREACH distinct_authors GENERATE Publisher, FLATTEN(Author) AS Author;
+
+joined = JOIN distinct_flat BY Author, author_result BY Author;
+filtered = FOREACH joined GENERATE 
+distinct_flat::Publisher AS Publisher, 
+distinct_flat::Author AS Author, 
+author_result::Books AS Books;
+
+result = FOREACH (GROUP filtered BY Publisher) {
+order_by_pub = ORDER filtered BY Publisher ASC;
+GENERATE group AS Publisher, order_by_pub.(Author, Books);
+};
+
+
+
+----  SELF ----
+MI	{(Alfred J. Kremer,{(2000,1),(2001,1)}),(Scott Adams,{(1997,12),(1998,11),(1996,9),(2002,4),(2001,4),(1999,4),(1994,3),(1995,3),(2003,3),(2000,3),(1993,2),(1972,1),(1991,1)})}
+
+
+publisher  bag of { author , bag of tuple (year, count) }
+
+echo "log4j.rootLogger=fatal" > nolog.conf
+pig -4 nolog.conf
+
+books = LOAD '/user/cloudera/input/BX-BooksCorrected.txt' 
+ USING PigStorage(';') AS 
+ (ISBN:chararray, BookTitle:chararray, 
+ BookAuthor:chararray, YearOfPublication:int, 
+ Publisher:chararray);
+
+author_yr = foreach books generate BookAuthor as author, YearOfPublication as year;
+author_year_grp = group author_yr by (author, year);
+author_year_count = foreach author_year_grp generate  group.author, group.year, COUNT(author_yr) as count_per_year;
+
+author_year_count_grp = group author_year_count by author;
+
+ author_result = FOREACH author_year_count_grp {
+ order_by_count = ORDER author_year_count BY count_per_year DESC;
+ GENERATE group AS author, order_by_count.(year, count_per_year) AS Books;
+};
+
+ author_result = FOREACH author_year_count_grp {
+ GENERATE group AS author, author_year_count.(year, count_per_year) AS Books;
+};
+
+pub_auth = foreach books generate  Publisher as publisher, BookAuthor as author;
+pub_grp = GROUP pub_auth BY publisher;
+pub_auth_dist = distinct pub_auth;
+
+pub_auth_join = JOIN pub_auth_dist BY author, author_result BY author;
+
+filtered = FOREACH pub_auth_join GENERATE 
+pub_auth_dist::publisher AS publisher, 
+pub_auth_dist::author AS author, 
+author_result::Books AS books;
+
+fil_grp = group filtered by publisher;
+
+result = FOREACH fil_grp {
+order_by_pub = ORDER filtered BY author ASC;
+GENERATE group AS publisher, order_by_pub.(author, books);
+};

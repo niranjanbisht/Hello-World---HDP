@@ -1,0 +1,19 @@
+curl -i "http://localhost:50070/webhdfs/v1?op=GETHOMEDIRECTORY"
+
+curl -i "http://localhost:50070/webhdfs/v1/user/cloudera/line.txt?op=GETFILESTATUS"
+
+Check directory status
+
+curl -i "http://localhost:50070/webhdfs/v1/user/cloudera?op=GETFILESTATUS"
+
+Create Directory 
+curl -i -X PUT "http://localhost:50070/webhdfs/v1/user/cloudera/webtest?op=MKDIRS"
+
+Create file ( 2 step)
+--------- Start
+
+curl -i -X PUT "http://localhost:50070/webhdfs/v1/user/cloudera/webtest/webhdfs-test.txt?op=CREATE"
+
+curl -i -X PUT -T webhdfs-test.txt "http://quickstart.cloudera:50075/webhdfs/v1/user/cloudera/webtest/webhdfs-test.txt?op=CREATE&namenoderpcaddress=quickstart.cloudera:8020&overwrite=false"
+
+----------- End

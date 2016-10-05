@@ -1,0 +1,36 @@
+[cloudera@quickstart test_dir]$ head -2 NYSE_stocks.tsv 
+exchange	stock_symbol	date	stock_price_open	stock_price_high	stock_price_low	stock_price_close	stock_volume	stock_price_adj_close
+NYSE		ASP			2001-12-31	12.55				12.8				12.42			12.8				11300			6.91
+
+
+daily    = load 'NYSE_daily.tsv' as (exchange, symbol);
+
+grp_all = group daily ALL;
+grp_all_count = foreach grp_all generate count(daily);
+(1210)
+
+grpd     = group daily by symbol;
+grp_count = foreach grpd generate group, COUNT(daily);
+(AIT,500)
+(ASP,500)
+(AVA,209)
+(stock_symbol,1)
+
+
+grpd2     = group daily by exchange;
+uniqcnt  = foreach grpd2 {
+           sym      = daily.symbol;
+           generate group, COUNT(sym);
+};
+(NYSE,1209)
+(exchange,1)
+
+uniq = distinct daily;
+(NYSE,AIT)
+(NYSE,ASP)
+(NYSE,AVA)
+(exchange,stock_symbol)
+
+
+
+

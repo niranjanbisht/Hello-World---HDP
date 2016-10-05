@@ -1,0 +1,422 @@
+Chapter 3 - Obtaining, Processing, and Preparing Data with Spark
+----------------------------------------------------------------
+
+val user_data = sc.textFile("ml-100k/u.user")
+user_data.first()
+
+user_data.take(10).foreach(println)
+
+
+val user_fields = user_data.map(line => line.split("\\|"))
+
+val num_users = user_fields.map(fields => fields(0)).count()
+val num_genders = user_fields.map(fields => fields(2)).distinct().count()
+val num_occupations = user_fields.map(fields => fields(3)).distinct().count()
+val num_zipcodes = user_fields.map(fields => fields(4)).distinct().count()
+
+println("num_users: " + num_users, "num_genders: " + num_genders, "num_occupations: " + num_occupations, "num_zipcodes: " + num_zipcodes)
+
+
+val ages = user_fields.map( x =>  x(1)).collect()
+
+val count_by_occupation = user_fields.map(fields => (fields(3), 1)).reduceByKey(_ + _).collect()
+
+val count_by_occupation2 = user_fields.map(fields => fields(3)).countByValue()
+
+val movie_data = sc.textFile("ml-100k/u.item")
+movie_data.first()
+val num_movies = movie_data.count()
+println ("Movies: " + num_movies)
+
+
+def convert_year(x: String) : Int = { 
+try{
+return x.toInt
+}
+catch
+{
+case e: Exception => return 1900 
+}
+}
+
+val movie_fields = movie_data.map(lines => lines.split("\\|"))
+
+val years = movie_fields.map(fields => fields(2)).map(yr => yr.split("\\-")).map(row => row.mkString(",")).filter( x => !x.isEmpty ).map(yr => yr.split("\\,")).map(fields => fields(2)).map( x => convert_year(x))
+
+val years_filtered = years.filter(x =>  x != 1900)
+
+val movie_ages = years_filtered.map(yr => 1998-yr).countByValue()
+
+val rating_data_raw = sc.textFile("ml-100k/u.data")
+rating_data_raw.first()
+
+val num_ratings = rating_data_raw.count()
+println ("Ratings: " + num_ratings)
+
+val rating_data = rating_data_raw.map(line => line.split("\\t"))
+val ratings = rating_data.map(fields => fields(2).toInt)
+rating_data.take(10).map(row => row.mkString(",")).foreach(println)
+
+val max_rating = ratings.reduce( (x, y) => Math.max(x, y))
+val min_rating = ratings.reduce( (x, y) => Math.min(x, y))
+
+val total_rating = ratings.reduce(( x, y ) => ( x + y) )
+
+val mean_rating = total_rating / num_ratings
+
+val ratings_per_user = num_ratings / num_users
+val ratings_per_movie = num_ratings / num_movies
+
+val user_ratings_grouped = rating_data.map(fields => (fields(0).toInt,fields(2).toInt)).groupByKey()
+
+user_ratings_grouped.take(10).foreach(println)
+
+val years_pre_processed = movie_fields.map(fields => fields(20)).map( x => convert_year(x)).collect()
+
+val all_occupations = user_fields.map(fields => fields(3)).distinct().collect()
+all_occupations.sortWith(_ < _)
+
+
+var idx = 0
+var all_occupations_dict = Map.empty[String, Int]
+
+for (o <- all_occupations )
+{
+all_occupations_dict += (o -> idx )
+idx +=1
+}
+
+import scala.collection.immutable.ListMap
+ListMap(all_occupations_dict.toSeq.sortBy(_._1):_*)
+ListMap(all_occupations_dict.toSeq.sortBy(_._2):_*)
+println(all_occupations_dict("programmer"))
+
+
+values:
+scala>
+binary_x
+
+val K = all_occupations_dict.size
+
+var binary_x = new Array[Int](K)
+
+val k_programmer = all_occupations_dict("programmer")
+
+binary_x(k_programmer) = 1
+
+--Derived features
+
+import org.joda.time.format.DateTimeFormat
+import org.joda.time.DateTime
+
+
+def extract_datetime(ts: Long) : DateTime =
+{
+return new DateTime(ts).toDateTime
+}
+
+
+val timestamps = rating_data.map( fields => fields(3).toInt)
+
+val ts_date = timestamps.map(ts => extract_datetime(ts))
+
+val hour_of_day = timestamps.map(ts => extract_datetime(ts).getHourOfDay())
+val hour_distinct = hour_of_day.distinct
+
+hour_distinct.take(5)
+rating_data.take(5)
+
+
+---ERROR
+def assign_tod(hr: Int): String = 
+{
+val times_of_day = (
+("morning" , (0 to 18)),
+("lunch" , (19, 20)),
+("afternoon" , (21, 22)),
+("evening" , (23, 24))
+)
+
+foreach ( times_of_day)
+{
+if times_of_day.exists(_._2 == hr) 
+{
+return _._1
+}
+}
+}
+
+time_of_day = hour_of_day.map(lambda hr: assign_tod(hr))
+time_of_day.take(5)
+
+---ERROR
+
+
+Simple text feature extraction
+------------------------------
+import scala.util.matching.Regex
+
+def extract_title(raw: String ): String =
+{
+val nonWord = new Regex(" (\\W)")
+val grps = nonWord findFirstIn raw
+
+if (grps.isEmpty)
+ return raw
+else
+ return raw.split(" (\\W)")(0)
+ 
+}
+
+val raw_titles = movie_fields.map( fields => fields(1))
+val movie_titles = raw_titles.map(title => extract_title(title))
+
+# next we tokenize the titles into terms. We'll use simple whitespace tokenization
+val title_terms = movie_titles.map(t => t.split(" "))
+print title_terms.take(5)
+
+# next we would like to collect all the possible terms, in order to build out dictionary of term <-> index mappings
+
+val all_terms = title_terms.flatMap(x => x).distinct().collect()
+
+# create a new dictionary to hold the terms, and assign the "1-of-k" indexes
+
+var idx = 0
+var all_terms_dict = Map.empty[String, Int]
+for (term <- all_terms )
+{
+all_terms_dict += (term -> idx )
+idx +=1
+}
+
+all_terms_dict.size
+
+val all_terms_dict2 = title_terms.flatMap(x => x).distinct().zipWithIndex().collectAsMap()
+
+# this function takes a list of terms and encodes it as a  sparse vector using an approach
+# similar to the 1-of-k encoding
+
+def create_vector(terms: Array[String], term_dict: Map[String,Int]) : Array[Array[Int]] = 
+{
+//num_terms = term_dict.size
+var x = Array.ofDim[Int](1, 3000)
+var t ="";
+for ( t <- terms ){
+if (term_dict.keySet.exists(_ == t ) )
+idx = term_dict(t)
+x(0)(idx) = 1
+}
+
+return x
+}
+
+
+val all_terms_bcast = sc.broadcast(all_terms_dict)
+val term_vectors = title_terms.map(terms => create_vector(terms, all_terms_bcast.value))
+term_vectors.take(5)
+
+
+import org.apache.spark.mllib.feature.Normalizer
+
+val x = new Array[Int](10)
+
+for ( i <- 0 until 9 )
+{
+val r = scala.util.Random
+x(i) = r.nextInt
+}
+
+val normalizer = new Normalizer()
+val vector = sc.parallelize(x)
+
+val normalized_x_mllib = normalizer.transform(vector).first().toArray()
+
+
+
+
+
+CHAPTER 4 - Building a Recommendation Engine with Spark
+-------------------------------------------------------
+
+val rawData = sc.textFile("ml-100k/u.data")
+val rawRatings = rawData.map(_.split("\t").take(3))
+
+import org.apache.spark.mllib.recommendation.ALS
+import org.apache.spark.mllib.recommendation.Rating
+
+
+val ratings = rawRatings.map { case Array(user, movie, rating) => Rating(user.toInt, movie.toInt, rating.toDouble) }
+
+val model = ALS.train(ratings, 50, 10, 0.01)
+
+model.userFeatures
+model.userFeatures.count
+model.productFeatures.count
+
+val predictedRating = model.predict(789, 123)
+
+val userId = 789
+val K = 10
+val topKRecs = model.recommendProducts(userId, K)
+println(topKRecs.mkString("\n"))
+
+val movies = sc.textFile("ml-100k/u.item")
+val titles = movies.map(line => line.split("\\|").take(2)).map(array => (array(0).toInt,array(1))).collectAsMap()
+titles(123)
+
+val moviesForUser = ratings.keyBy(_.user).lookup(789)
+
+println(moviesForUser.size)
+
+moviesForUser.sortBy(-_.rating).take(10).map(rating => (titles(rating.product), rating.rating)).foreach(println)
+
+topKRecs.map(rating => (titles(rating.product), rating.rating)).foreach(println)
+
+Item recommendations
+--------------------
+
+import org.jblas.DoubleMatrix --Error
+val aMatrix = new DoubleMatrix(Array(1.0, 2.0, 3.0))
+
+Mean Squared Error
+val actualRating = moviesForUser.take(1)(0)
+val predictedRating = model.predict(789, actualRating.product)
+
+val squaredError = math.pow(predictedRating - actualRating.rating,2.0)
+
+val usersProducts = ratings.map{ case Rating(user, product, rating) => (user, product)}
+val predictions = model.predict(usersProducts).map{case Rating(user, product, rating) => ((user, product), rating)}
+
+val ratingsAndPredictions = ratings.map{case Rating(user, product, rating) => ((user, product), rating)}.join(predictions)
+
+val MSE = ratingsAndPredictions.map{case ((user, product), (actual, predicted)) => math.pow((actual -
+predicted), 2)}.reduce(_ + _) / ratingsAndPredictions.count
+
+println("Mean Squared Error = " + MSE)
+
+val RMSE = math.sqrt(MSE)
+println("Root Mean Squared Error = " + RMSE)
+
+Mean average precision at K
+---------------------------
+
+def avgPrecisionK(actual: Seq[Int], predicted: Seq[Int], k: Int): Double = {
+val predK = predicted.take(k)
+var score = 0.0
+var numHits = 0.0
+for ((p, i) <- predK.zipWithIndex) {
+if (actual.contains(p)) {
+numHits += 1.0
+score += numHits / (i.toDouble + 1.0)
+}
+}
+if (actual.isEmpty) {
+1.0
+} else {
+score / scala.math.min(actual.size, k).toDouble
+}
+}
+
+
+val actualMovies = moviesForUser.map(_.product)
+val predictedMovies = topKRecs.map(_.product)
+val apk10 = avgPrecisionK(actualMovies, predictedMovies, 10)
+
+val itemFactors = model.productFeatures.map { case (id, factor) =>factor }.collect()
+val itemMatrix = new DoubleMatrix(itemFactors) -- ERROR
+println(itemMatrix.rows, itemMatrix.columns)
+
+val imBroadcast = sc.broadcast(itemMatrix)
+
+val allRecs = model.userFeatures.map{ case (userId, array) =>
+val userVector = new DoubleMatrix(array)
+val scores = imBroadcast.value.mmul(userVector)
+val sortedWithId = scores.data.zipWithIndex.sortBy(-_._1)
+val recommendedIds = sortedWithId.map(_._2 + 1).toSeq
+(userId, recommendedIds)
+}
+
+val userMovies = ratings.map{ case Rating(user, product, rating) =>
+(user, product) }.groupBy(_._1)
+
+val K = 10
+val MAPK = allRecs.join(userMovies).map{ case (userId, (predicted,
+actualWithIds)) =>
+val actual = actualWithIds.map(_._2).toSeq
+avgPrecisionK(actual, predicted, K)
+}.reduce(_ + _) / allRecs.count
+println("Mean Average Precision at K = " + MAPK)
+
+RMSE and MSE - MLLib
+-----------
+
+import org.apache.spark.mllib.evaluation.RegressionMetrics
+val predictedAndTrue = ratingsAndPredictions.map { case ((user,product), (predicted, actual)) => (predicted, actual) }
+val regressionMetrics = new RegressionMetrics(predictedAndTrue)
+
+println("Mean Squared Error = " + regressionMetrics.meanSquaredError)
+println("Root Mean Squared Error = " + regressionMetrics.
+rootMeanSquaredError)
+
+
+MAP - MLLib
+------------
+
+import org.apache.spark.mllib.evaluation.RankingMetrics
+val predictedAndTrueForRanking = allRecs.join(userMovies).map{ case
+(userId, (predicted, actualWithIds)) =>
+val actual = actualWithIds.map(_._2)
+(predicted.toArray, actual.toArray)
+}
+val rankingMetrics = new RankingMetrics(predictedAndTrueForRanking)
+println("Mean Average Precision = " + rankingMetrics.
+meanAveragePrecision)
+
+val MAPK2000 = allRecs.join(userMovies).map{ case (userId, (predicted,
+actualWithIds)) =>
+val actual = actualWithIds.map(_._2).toSeq
+avgPrecisionK(actual, predicted, 2000)
+}.reduce(_ + _) / allRecs.count
+println("Mean Average Precision = " + MAPK2000)
+
+
+
+Chapter 5 - Building a Classification Model with Spark
+======================================================
+code in Scala
+
+Chapter 6 - Building a Regression Model with Spark
+=====================================================
+
+val raw_data = sc.textFile("hour_noheader.csv")
+val num_data = raw_data.count()
+val records = raw_data.map(x => x.split(","))
+records.cache()
+
+import org.apache.spark.rdd.RDD
+def get_mapping(rdd: RDD[Array[String]], idx: Int): scala.collection.Map[String,Long] =
+{
+return rdd.map(fields => fields(idx)).distinct().zipWithIndex().collectAsMap()
+}
+
+get_mapping(records, 2)
+
+val mappings: Array[Map[String,Long]] = Array[Map[String,Long]]
+
+for (i <- 2 to 10) { val mappings(i) = get_mapping(records, i)}
+
+!!!!!!!! Skipped - python based
+
+
+Chapter 6 - Building a Clustering Model with Spark
+=====================================================
+
+
+
+
+
+
+
+
+
+

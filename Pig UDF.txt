@@ -1,0 +1,3 @@
+register /home/cloudera/test_dir/myudfs.jar;
+define upper myudfs.UPPER();
+city_caps = foreach v generate upper(city) as city_upper;

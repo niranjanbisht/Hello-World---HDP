@@ -1,0 +1,29 @@
+1904287	Christopher Rodriguez	Jan 11, 2003 
+96391595	Thomas Stewart	6/17/1969 
+2236067	John Nelson	08/22/54 
+
+
+insert into problem1 values(1904287,"Christopher Rodriguez","Jan 11, 2003");
+
+insert into problem1 values(96391595,"Thomas Stewart","6/17/1969") ,(2236067,"John Nelson","08/22/54");
+
+•Create a new table named solution in the problem1 database of the Hive metastore
+•Your solution table must have its data stored in the HDFS directory /user/cert/problem1/solution
+•Your solution table must have exactly the same columns as the customer table in the same order, as well as keeping the existing file format
+
+•For every row in the solution table, replace the contents of the birthday field with a date string in “MM/DD/YY” format.
+?MM is the zero-padded month (01-12),
+?DD is the zero-padded day (01-31),
+?YY is the zero-padded 2-digit year (00-99)
+
+ADD JAR /home/cloudera/test_dir/myudfs.jar;
+
+CREATE TEMPORARY FUNCTION ToDateAnyFormat as 'myudfs.DateUtilHDP';
+
+
+select empno, empname, ToDateAnyFormat(dob), dob from problem1;
+
+create table solution1 
+location '/user/cert/problem1/solution'
+as 
+select empno, empname, ToDateAnyFormat(dob) from problem1 ;

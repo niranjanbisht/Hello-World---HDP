@@ -1,0 +1,19 @@
+Mary had a little lamb
+its fleece was white as snow
+and everywhere that Mary went
+the lamb was sure to go.
+
+-- Load infile from the file named Mary, and call the single
+-- field in the record 'line'.
+infile = load 'mary' as (line);
+-- TOKENIZE splits the line into a field for each word.
+-- flatten will take the collection of records returned by
+-- TOKENIZE and produce a separate record for each one, calling the single
+-- field in the record word.
+words = foreach infile generate flatten(TOKENIZE(line)) as word;
+-- Now group them together by each word.
+grpd = group words by word;
+-- Count them.
+cntd = foreach grpd generate group, COUNT(words);
+-- Print out the results.
+dump cntd;

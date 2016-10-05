@@ -1,0 +1,8 @@
+batting = load 'Batting.csv' using PigStorage(',') AS (playerID:chararray,yearID:int,stint:int,teamID:chararray,lgID:chararray,G:int,G_batting:int,AB:int,R:int,H:int,BB1:int,BBB:int,HR:int,RBI:int,SB:int,CS:int,BB:int,SO:int,IBB:int,HBP:int,SH:int,SF:int,GIDP:int,G_old:int);
+raw_runs = FILTER batting BY $1>0;
+runs = FOREACH raw_runs GENERATE $0 as playerID, $1 as year, $8 as runs;
+grp_data = GROUP runs by (year);
+max_runs = FOREACH grp_data GENERATE group as grp,MAX(runs.runs) as max_runs;
+join_max_run = JOIN max_runs by ($0, max_runs), runs by (year,runs);  
+join_data = FOREACH join_max_run GENERATE $0 as year, $2 as playerID, $1 as runs;  
+DUMP join_data;

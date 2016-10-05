@@ -1,0 +1,16 @@
+exchange	stock_symbol	date	stock_price_open	stock_price_high	stock_price_low	stock_price_close	stock_volume	stock_price_adj_close
+NYSE	ASP	2001-12-31	12.55	12.8	12.42	12.8	11300	6.91
+NYSE	ASP	2001-12-28	12.5	12.55	12.42	12.55	4800	6.78
+NYSE	ASP	2001-12-27	12.59	12.59	12.5	12.57	5400	6.79
+NYSE	ASP	2001-12-26	12.45	12.6	12.45	12.55	5400	6.78
+NYSE	ASP	2001-12-24	12.61	12.61	12.61	12.61	1400	6.76
+
+val lines = sc.textFile("/user/cloudera/NYSE_stocks.tsv");
+val records = lines.map(_.split("\t"))
+val filtered = records.filter(rec => (rec(1) != ""))
+filtered.foreach(println(_))
+
+val tuples = filtered.map(rec => (rec(1), rec(3).toInt))
+
+val maxPrice = tuples.reduceByKey((a, b) => Math.max(a, b))
+

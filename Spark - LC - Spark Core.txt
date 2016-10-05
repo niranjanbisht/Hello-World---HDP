@@ -1,0 +1,114 @@
+Lazy Eval
+
+val list = List("a", "b", "c", "d")
+
+val rddList = sc.makeRDD(list)
+list.map(l =>{println("mapping list: " + l)})
+
+val rddMap = rddList.map(l => {println("mnapping RDD: " + l)})
+rddMap.foreach(println)
+
+-----------------------
+
+Lineage 
+
+val a = sc.makeRDD(List(1 to 10))
+
+val b = a.map((_,"b"))
+val c = a.map((_,"c"))  
+val d = b.cogroup(c)
+d.toDebugString 
+
+
+------------------
+Saving as file
+
+val a = sc.parallelize(List(1,2,4,5,6))
+a.saveAsTextFile("/tmp/a_text") 
+
+/* add parallelization of 3 */
+val b = sc.parallelize(List(1,2,4,5,6),3) 
+
+
+As Seq file
+As Object file
+
+------------------
+Numeric fns
+
+val a = sc.parallelize(List(1,2,3,4,5,6,7,8,9,10))
+a.stats()
+
+val h = sc.parallelize(List(1,10,20,50))
+h.histogram(4)
+
+--------------
+Accum
+
+import org.apache.spark.AccumlatorParam ****Error
+
+object StringAccumulatorParam extends AccumulatorParam[String]{ def object(initialValue: String) : String = {" "  } def addInPlace(s1: String, s2:String) : String = {  s1 + "-" + s2 }  }
+
+stringAccum = sc.accumulator("start","My String Accumulator")(StringAccumulatorParam)
+
+sc.parallelize(Array("a","b","c")).foreach(x => stringAccum += x)
+
+--------------
+Broadcast Vars
+
+import util.Random.nextInt
+val visitorFile = (1 to 10000).map(_ => nextInt).map((_,nextInt)).map(a => a.2 -> a.1).toMap ****Error
+
+val sessionMap = sc.broadcast(visitorFile)
+sessionMap.value
+
+bin/spark-shell --conf "spark.executor.extraJavaOptions -Dspark.serializer=org.apache.spark.serializer. KryoSerializer"
+
+
+
+--------------------
+
+Piping to External Applications 
+
+val a = sc.makeRDD(List(1,2,3,4,5))
+val scriptPath = "/tmp/echo.sh"
+val pipeRDD = a.pipe(scriptPath) 
+pipeRDD.collect()
+
+vi echo.sh
+#!/bin/sh
+echo "Running shell script"
+while read LINE; do
+echo ${LINE}
+done
+
+--------------
+Dataframes interoperating with RDDs
+
+student.txt
+John,20,Business - Finance
+George,22,Engineering
+Gabriella,24,Law
+
+case class Student(name: String, age: Int, major: String)
+
+import sqlContext.implicits._
+val students = sc.textFile("students.txt").map(_.split(",")).map(s => Student(s(0),s(1).trim.toInt,s(2))).toDF()
+students.registerTempTable("students")
+val lawStudents = sqlContext.sql("Select name from students where major == 'Law'")
+
+lawStudents.map(t => "Name: " + t(0)).collect().foreach(println)
+
+
+--------------------
+Hive interaction
+
+val sqlContext2 = new org.apache.spark.sql.hive.HiveContext(sc)
+
+sqlContext.sql("CREATE TABLE IF NOT EXISTS kv1 (key INT, value STRING)")
+sqlContext2.sql("Select * from default.problem1") 
+
+
+
+
+

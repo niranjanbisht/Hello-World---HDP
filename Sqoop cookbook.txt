@@ -1,0 +1,175 @@
+sqoop list-databases \
+--connect jdbc:mysql://localhost/sqoop \
+--username root \
+--password cloudera
+
+sqoop list-tables \
+--connect jdbc:mysql://localhost/sqoop \
+--username root \
+--password cloudera
+
+sqoop eval \
+--connect jdbc:mysql://localhost/sqoop \
+--username root \
+--password cloudera \
+--query "select count(*) from visits"
+
+sqoop import \
+--connect jdbc:mysql://localhost/sqoop \
+--username root \
+--password cloudera \
+--table cities \
+--target-dir /etl/input/citiesor
+
+hadoop fs -rm -r /etl
+
+sqoop import \
+--connect jdbc:mysql://localhost/sqoop \
+--username root \
+--password cloudera \
+--table cities \
+--warehouse-dir /etl/input
+
+hadoop fs -rm -r /etl
+
+sqoop import \
+--connect jdbc:mysql://localhost/sqoop \
+--username root \
+--password cloudera \
+--table cities \
+--warehouse-dir /etl/input \
+--where "country = 'USA'"
+
+
+sqoop import \
+--connect jdbc:mysql://localhost/sqoop \
+--username root \
+--table cities \
+--warehouse-dir /etl/input \
+-P
+
+
+sqoop import \
+--connect jdbc:mysql://localhost/sqoop \
+--username root \
+--password cloudera \
+--table cities \
+--warehouse-dir /etl/input \
+--compress
+
+sqoop import \
+--connect jdbc:mysql://localhost/sqoop \
+--username root \
+--password cloudera \
+--table cities \
+--warehouse-dir /etl/input \
+--direct
+
+sqoop import \
+--connect jdbc:mysql://localhost/sqoop \
+--username root \
+--password cloudera \
+--table cities \
+--warehouse-dir /etl/input \
+--num-mappers 1
+
+
+sqoop import-all-tables \
+--connect jdbc:mysql://localhost/sqoop \
+--username root \
+--password cloudera \
+--warehouse-dir /etl/input \
+--exclude-tables cities,countries
+
+
+
+sqoop import \
+--connect jdbc:mysql://localhost/sqoop \
+--username root \
+--password cloudera \
+--table visits \
+--warehouse-dir /etl/input \
+--incremental append \
+--check-column id \
+--last-value 2
+
+
+
+sqoop import \
+--connect jdbc:mysql://localhost/sqoop \
+--username root \
+--password cloudera \
+--table visits \
+--warehouse-dir /etl/input \
+--incremental lastmodified \
+--check-column last_update_date \
+--last-value "1983-05-22 01:01:01" \
+--merge-key id
+
+
+sqoop job --delete visits;
+
+sqoop job \
+--create visits \
+-- \
+import \
+--connect jdbc:mysql://localhost/sqoop \
+--username root \
+--password cloudera \
+--table visits \
+--warehouse-dir /etl/input \
+--incremental append \
+--check-column id \
+--last-value 0;
+
+sqoop job --exec visits;
+
+
+
+sqoop import \
+--connect jdbc:mysql://localhost/sqoop \
+--username root \
+--password cloudera \
+--query 'SELECT normcities.id, countries.country, normcities.city FROM normcities JOIN countries USING(country_id) WHERE $CONDITIONS' \
+--split-by id \
+--target-dir /etl/input/cities 
+
+
+sqoop import \
+--connect jdbc:mysql://localhost/sqoop \
+--username root \
+--password cloudera \
+--table visits \
+--hive-import
+
+
+---------------------- EXPORT ----------------
+
+
+sqoop export \
+--connect jdbc:mysql://localhost/sqoop \
+--username root \
+--password cloudera \
+--table cities \
+--export-dir /etl/input/cities  \
+--batch
+
+
+sqoop export \
+-Dsqoop.export.records.per.statement=10 \
+--connect jdbc:mysql://localhost/sqoop \
+--username root \
+--password cloudera \
+--table cities \
+--export-dir /etl/input/cities 
+
+sqoop export \
+-Dsqoop.export.statements.per.transaction=10 \
+--connect jdbc:mysql://localhost/sqoop \
+--username root \
+--password cloudera \
+--table cities \
+--export-dir /etl/input/cities 
+
+
+

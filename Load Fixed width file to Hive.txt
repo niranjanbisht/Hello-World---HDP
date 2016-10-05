@@ -1,0 +1,39 @@
+EMP-ID    FIRST-NAME          LASTNAME            JOB-TITLE           MGR-EMP-ID
+12301     Johnny              Begood              Programmer          12306     
+12302     Ainta               Listening           Programmer          12306     
+12303     Neva                Mind                Architect           12306     
+12304     Joseph              Blow                Tester              12308     
+12305     Sallie              Mae                 Programmer          12306     
+12306     Bilbo               Baggins             Development Manager 12307     
+12307     Nuther              One                 Director            11111     
+12308     Yeta                Notherone           Testing Manager     12307     
+12309     Evenmore            Dumbnames           Senior Architect    12307     
+12310     Last                Sillyname           Senior Tester       12308
+
+
+REGISTER /usr/jars/piggybank.jar;
+
+define SUBSTRING org.apache.pig.piggybank.evaluation.string.SUBSTRING();
+
+fixed_length_input = load '/user/cloudera/emps-fixed.txt' as (row:chararray);
+
+
+employees = foreach fixed_length_input generate
+    (int)TRIM(SUBSTRING(row, 0,   9)) AS emp_id,
+         TRIM(SUBSTRING(row, 10, 29)) AS first_name,
+         TRIM(SUBSTRING(row, 30, 49)) AS last_name,
+         TRIM(SUBSTRING(row, 50, 69)) AS job_title,
+    (int)TRIM(SUBSTRING(row, 70, 79)) AS mgr_emp_id;
+
+store employees into '/user/cloudera/emps-delimited';
+
+
+CREATE EXTERNAL TABLE FIXED_DATA (
+EMP_ID          STRING,
+FIRST_NAME      STRING,
+LAST_NAME       STRING,
+JOB_TITLE       STRING,
+MGR_EMP_ID      STRING)
+ROW FORMAT SERDE 'org.apache.hadoop.hive.contrib.serde2.RegexSerDe'
+WITH SERDEPROPERTIES ("input.regex" = "(.{10})(.{20})(.{20})(.{20})(.{5}).*")
+LOCATION '/user/cloudera/emps';
